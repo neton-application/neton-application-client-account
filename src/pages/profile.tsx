@@ -8,6 +8,46 @@ interface MemberProfile {
   id: number; username?: string | null; nickname?: string | null; avatar?: string | null;
   mobile?: string | null; email?: string | null;
 }
+
+/** 绑定邮箱：发码 → 填码 → 绑定。绑定后可以用邮箱找回密码。 */
+function BindEmailCard({ current, onBound }: { current?: string | null; onBound: () => void }) {
+  const [email, setEmail] = React.useState("");
+  const [code, setCode] = React.useState("");
+  const [sent, setSent] = React.useState(false);
+  const [busy, setBusy] = React.useState(false);
+  const [msg, setMsg] = React.useState<string | null>(null);
+  async function send() {
+    setMsg(null); setBusy(true);
+    try { await apiWrite("/app/member/user/send-email-code", "POST", { email: email.trim(), scene: "bind_email" }); setSent(true); setMsg("验证码已发送，请查收邮件（5 分钟内有效）"); }
+    catch (cause) { setMsg((cause as Error).message); } finally { setBusy(false); }
+  }
+  async function bind() {
+    setMsg(null); setBusy(true);
+    try { await apiWrite("/app/member/user/bind-email", "PUT", { email: email.trim(), code: code.trim() }); setMsg("邮箱已绑定"); setEmail(""); setCode(""); setSent(false); onBound(); }
+    catch (cause) { setMsg((cause as Error).message); } finally { setBusy(false); }
+  }
+  return (
+    <Card style={{ marginTop: 12 }}>
+      <CardHeader><CardTitle>邮箱</CardTitle></CardHeader>
+      <CardContent>
+        <p style={{ margin: "0 0 8px", fontSize: 13 }}>当前：{current || "未绑定"}。绑定后可用邮箱找回密码。</p>
+        <Field label={current ? "更换邮箱" : "邮箱地址"}>
+          <div style={{ display: "flex", gap: 8 }}>
+            <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
+            <Button variant="secondary" onClick={() => void send()} disabled={busy || !email.includes("@")}>{sent ? "重新发送" : "发送验证码"}</Button>
+          </div>
+        </Field>
+        {sent ? (
+          <Field label="验证码"><div style={{ display: "flex", gap: 8 }}>
+            <Input value={code} onChange={(e) => setCode(e.target.value)} placeholder="6 位数字" inputMode="numeric" />
+            <Button onClick={() => void bind()} disabled={busy || code.trim().length < 4}>绑定</Button>
+          </div></Field>
+        ) : null}
+        {msg ? <p style={{ fontSize: 13, margin: "6px 0 0" }}>{msg}</p> : null}
+      </CardContent>
+    </Card>
+  );
+}
 interface MyInviteCode { code: string; usedCount: number }
 
 /** 个人资料、改密码、邀请。通用模块：只依赖 member 的 app 接口，不含任何产品特有字段。 */
@@ -70,6 +110,7 @@ export default function Page() {
             <Field label="用户名"><Input value={profile?.username ?? ""} readOnly /></Field>
             <Field label="昵称"><Input value={nickname} onChange={(e) => setNickname(e.target.value)} /></Field>
             <Field label="手机"><Input value={profile?.mobile ?? ""} readOnly /></Field>
+            <Field label="邮箱"><Input value={profile?.email ?? ""} readOnly placeholder="未绑定" /></Field>
             <div style={{ marginTop: 12 }}><Button onClick={() => void save()}>保存</Button></div>
           </CardContent>
         </Card>
@@ -84,6 +125,7 @@ export default function Page() {
           </CardContent>
         </Card>
       </div>
+      <BindEmailCard current={profile?.email} onBound={() => void load()} />
       {invite ? (
         <Card style={{ marginTop: 12 }}>
           <CardHeader><CardTitle>邀请好友</CardTitle></CardHeader>
