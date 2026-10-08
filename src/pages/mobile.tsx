@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { apiFetch, apiWrite } from "@neton/application-client-runtime/client";
+import { useQuery, useQueryClient } from "@neton/application-client-runtime/client-context";
 import { Alert, Button, Card, CardContent, Field, Input, KitLink, PageHeader, Select } from "@neton/application-client-kit";
 
 /** 后端 SmsScene.MEMBER_UPDATE_MOBILE —— 换绑手机的验证码场景号 */
@@ -24,7 +25,6 @@ const COUNTRY_CODES = [
  * 这里拆成区号 + 号码两栏，免得用户自己拼。
  */
 export default function Page() {
-  const [current, setCurrent] = React.useState<string | null | undefined>(undefined);
   const [cc, setCc] = React.useState("+86");
   const [number, setNumber] = React.useState("");
   const [code, setCode] = React.useState("");
@@ -34,10 +34,10 @@ export default function Page() {
   const [error, setError] = React.useState<string | null>(null);
   const [notice, setNotice] = React.useState<string | null>(null);
 
-  const load = React.useCallback(() => {
-    apiFetch<{ mobile?: string | null }>("/app/member/user/get").then((p) => setCurrent(p.mobile ?? null)).catch((e: Error) => setError(e.message));
-  }, []);
-  React.useEffect(load, [load]);
+  const client = useQueryClient();
+  const profileQ = useQuery({ queryKey: ["member-self"], queryFn: () => apiFetch<{ mobile?: string | null }>("/app/member/user/get") });
+  const current: string | null | undefined = profileQ.data ? profileQ.data.mobile ?? null : undefined;
+  const load = () => client.invalidateQueries({ queryKey: ["member-self"] });
   React.useEffect(() => {
     if (cooldown <= 0) return;
     const t = setTimeout(() => setCooldown((c) => c - 1), 1000);

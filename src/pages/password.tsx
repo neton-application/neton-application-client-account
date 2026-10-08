@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { apiFetch, apiWrite } from "@neton/application-client-runtime/client";
+import { useQuery, useQueryClient } from "@neton/application-client-runtime/client-context";
 import { Alert, Button, Card, CardContent, Field, Input, KitLink, PageHeader } from "@neton/application-client-kit";
 
 /**
@@ -9,17 +10,15 @@ import { Alert, Button, Card, CardContent, Field, Input, KitLink, PageHeader } f
  * 短信或社交登录注册、从没设过密码的账号直接设置。忘记当前密码请走登录页的「找回密码」。
  */
 export default function Page() {
-  const [hasPassword, setHasPassword] = React.useState<boolean | null>(null);
   const [pw, setPw] = React.useState({ old: "", next: "", confirm: "" });
   const [error, setError] = React.useState<string | null>(null);
   const [done, setDone] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
 
-  React.useEffect(() => {
-    apiFetch<{ hasPassword?: boolean }>("/app/member/user/get")
-      .then((p) => setHasPassword(p.hasPassword !== false))
-      .catch(() => setHasPassword(true));
-  }, []);
+  const client = useQueryClient();
+  const profileQ = useQuery({ queryKey: ["member-self"], queryFn: () => apiFetch<{ hasPassword?: boolean }>("/app/member/user/get") });
+  // 读不到资料时按「已有密码」处理：多要一个当前密码，比把没密码的人卡住更安全
+  const hasPassword: boolean | null = profileQ.data ? profileQ.data.hasPassword !== false : profileQ.isError ? true : null;
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -29,7 +28,8 @@ export default function Page() {
     setBusy(true);
     try {
       await apiWrite("/app/member/user/update-password", "PUT", { oldPassword: pw.old, newPassword: pw.next });
-      setPw({ old: "", next: "", confirm: "" }); setDone(true); setHasPassword(true);
+      setPw({ old: "", next: "", confirm: "" }); setDone(true);
+      void client.invalidateQueries({ queryKey: ["member-self"] });
     } catch (cause) { setError((cause as Error).message); } finally { setBusy(false); }
   }
 

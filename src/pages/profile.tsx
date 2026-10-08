@@ -2,28 +2,15 @@
 
 import * as React from "react";
 import { apiFetch, apiWrite } from "@neton/application-client-runtime/client";
-import { Alert, Button, Card, CardContent, CardHeader, CardTitle, Drawer, Field, Input, KitLink, PageHeader } from "@neton/application-client-kit";
+import { useQuery, useQueryClient } from "@neton/application-client-runtime/client-context";
+import { maskEmail, maskMobile, memberDisplayName, memberInitial } from "@neton/application-client-runtime/types";
+import { Alert, Button, Card, CardContent, CardHeader, CardTitle, Drawer, Field, Input, KitLink, PageHeader, UserIcon } from "@neton/application-client-kit";
 
 interface MemberProfile {
   id: number; username?: string | null; nickname?: string | null; avatar?: string | null;
   mobile?: string | null; email?: string | null; hasPassword?: boolean;
 }
 interface MyInviteCode { code: string; usedCount: number }
-
-/** +8613812345678 → +86 138****5678；不是 E.164 的原样打码中间段。 */
-function maskMobile(m: string): string {
-  const digits = m.replace(/^\+\d{1,3}/, "");
-  const cc = m.slice(0, m.length - digits.length);
-  if (digits.length < 7) return m;
-  return `${cc ? `${cc} ` : ""}${digits.slice(0, 3)}****${digits.slice(-4)}`;
-}
-
-/** alice@example.com → al***@example.com */
-function maskEmail(e: string): string {
-  const [name, domain] = e.split("@");
-  if (!domain) return e;
-  return `${name.slice(0, Math.min(2, name.length))}***@${domain}`;
-}
 
 const actionClass =
   "inline-flex h-8 items-center rounded-md border border-[var(--border)] px-3 text-xs font-medium text-[var(--foreground)] transition hover:bg-[var(--muted)]";
@@ -48,28 +35,22 @@ function Row({ label, value, hint, action }: { label: string; value: React.React
  * 密码在 password.tsx。这里唯一能就地改的是昵称，也是在抽屉里改、不直接暴露输入框。
  */
 export default function Page() {
-  const [profile, setProfile] = React.useState<MemberProfile | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [notice, setNotice] = React.useState<string | null>(null);
   const [editingNickname, setEditingNickname] = React.useState(false);
   const [nickname, setNickname] = React.useState("");
   const [saving, setSaving] = React.useState(false);
-  const [invite, setInvite] = React.useState<MyInviteCode | null>(null);
   const [copied, setCopied] = React.useState(false);
 
-  const load = React.useCallback(async () => {
-    try {
-      setProfile(await apiFetch<MemberProfile>("/app/member/user/get"));
-      setError(null);
-    } catch (cause) { setError((cause as Error).message); }
-  }, []);
-
-  React.useEffect(() => { void load(); }, [load]);
-  React.useEffect(() => {
-    let alive = true;
-    apiFetch<MyInviteCode>("/app/member/invite-code/mine").then((c) => { if (alive) setInvite(c); }).catch(() => { /* 未启用邀请功能时忽略 */ });
-    return () => { alive = false; };
-  }, []);
+  // useQuery 而不是 effect 里取数：工作区切回页签会重挂 effect，那样每次切换都整页重拉。
+  // 「member-self」与邮箱 / 手机 / 密码页共用，那几页改完失效它，回到这里就是新值。
+  const client = useQueryClient();
+  const profileQ = useQuery({ queryKey: ["member-self"], queryFn: () => apiFetch<MemberProfile>("/app/member/user/get") });
+  // 未启用邀请功能时接口会失败，当作没有邀请码，不报错
+  const inviteQ = useQuery({ queryKey: ["member-invite-code"], queryFn: () => apiFetch<MyInviteCode>("/app/member/invite-code/mine").catch(() => null) });
+  const profile = profileQ.data ?? null;
+  const invite = inviteQ.data ?? null;
+  const load = () => client.invalidateQueries({ queryKey: ["member-self"] });
 
   async function saveNickname() {
     setSaving(true); setError(null); setNotice(null);
@@ -79,19 +60,19 @@ export default function Page() {
     } catch (cause) { setError((cause as Error).message); } finally { setSaving(false); }
   }
 
-  const display = profile?.nickname || profile?.username || "";
+  const display = profile ? memberDisplayName(profile) : "";
   const inviteLink = invite && typeof window !== "undefined" ? `${window.location.origin}/register?invite=${encodeURIComponent(invite.code)}` : "";
 
   return (
     <div className="flex flex-col gap-4">
       <PageHeader eyebrow="ACCOUNT" title="个人资料" description="账号信息与安全设置" />
-      {error ? <Alert tone="error">{error}</Alert> : null}
+      {error ?? profileQ.error ? <Alert tone="error">{error ?? (profileQ.error as Error).message}</Alert> : null}
       {notice ? <Alert tone="info">{notice}</Alert> : null}
 
       <Card>
         <CardContent className="flex items-center gap-4 py-5">
           <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-[var(--foreground)] text-xl font-semibold text-[var(--background)]">
-            {display.slice(0, 1).toUpperCase() || "·"}
+            {(profile && memberInitial(profile)) || <UserIcon size={24} />}
           </span>
           <div className="min-w-0">
             <div className="truncate text-base font-semibold text-[var(--foreground)]">{display || "—"}</div>
@@ -103,7 +84,11 @@ export default function Page() {
       <Card>
         <CardHeader><CardTitle>账号信息</CardTitle></CardHeader>
         <CardContent>
-          <Row label="用户名" value={profile?.username ?? "—"} hint="用户名注册后不可修改" />
+          <Row
+            label="用户名"
+            value={profile?.username || "未设置"}
+            hint={profile?.username ? "用户名注册后不可修改" : "短信注册的账号没有用户名，可用手机号登录"}
+          />
           <Row
             label="昵称"
             value={profile?.nickname || "未设置"}

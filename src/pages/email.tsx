@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { apiFetch, apiWrite } from "@neton/application-client-runtime/client";
+import { useQuery, useQueryClient } from "@neton/application-client-runtime/client-context";
 import { Alert, Button, Card, CardContent, Field, Input, KitLink, PageHeader } from "@neton/application-client-kit";
 
 /**
@@ -9,7 +10,6 @@ import { Alert, Button, Card, CardContent, Field, Input, KitLink, PageHeader } f
  * 免得有人把别人的邮箱挂到自己账号上，或者手滑填错后再也收不到找回密码的邮件。
  */
 export default function Page() {
-  const [current, setCurrent] = React.useState<string | null | undefined>(undefined);
   const [email, setEmail] = React.useState("");
   const [code, setCode] = React.useState("");
   const [sent, setSent] = React.useState(false);
@@ -18,10 +18,10 @@ export default function Page() {
   const [error, setError] = React.useState<string | null>(null);
   const [notice, setNotice] = React.useState<string | null>(null);
 
-  const load = React.useCallback(() => {
-    apiFetch<{ email?: string | null }>("/app/member/user/get").then((p) => setCurrent(p.email ?? null)).catch((e: Error) => setError(e.message));
-  }, []);
-  React.useEffect(load, [load]);
+  const client = useQueryClient();
+  const profileQ = useQuery({ queryKey: ["member-self"], queryFn: () => apiFetch<{ email?: string | null }>("/app/member/user/get") });
+  const current: string | null | undefined = profileQ.data ? profileQ.data.email ?? null : undefined;
+  const load = () => client.invalidateQueries({ queryKey: ["member-self"] });
   React.useEffect(() => {
     if (cooldown <= 0) return;
     const t = setTimeout(() => setCooldown((c) => c - 1), 1000);
