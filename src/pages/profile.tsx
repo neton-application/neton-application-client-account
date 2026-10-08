@@ -2,68 +2,65 @@
 
 import * as React from "react";
 import { apiFetch, apiWrite } from "@neton/application-client-runtime/client";
-import { Button, Card, CardContent, CardHeader, CardTitle, Field, Input, PageHeader } from "@neton/application-client-kit";
+import { Alert, Button, Card, CardContent, CardHeader, CardTitle, Drawer, Field, Input, KitLink, PageHeader } from "@neton/application-client-kit";
 
 interface MemberProfile {
   id: number; username?: string | null; nickname?: string | null; avatar?: string | null;
-  mobile?: string | null; email?: string | null;
-}
-
-/** 绑定邮箱：发码 → 填码 → 绑定。绑定后可以用邮箱找回密码。 */
-function BindEmailCard({ current, onBound }: { current?: string | null; onBound: () => void }) {
-  const [email, setEmail] = React.useState("");
-  const [code, setCode] = React.useState("");
-  const [sent, setSent] = React.useState(false);
-  const [busy, setBusy] = React.useState(false);
-  const [msg, setMsg] = React.useState<string | null>(null);
-  async function send() {
-    setMsg(null); setBusy(true);
-    try { await apiWrite("/app/member/user/send-email-code", "POST", { email: email.trim(), scene: "bind_email" }); setSent(true); setMsg("验证码已发送，请查收邮件（5 分钟内有效）"); }
-    catch (cause) { setMsg((cause as Error).message); } finally { setBusy(false); }
-  }
-  async function bind() {
-    setMsg(null); setBusy(true);
-    try { await apiWrite("/app/member/user/bind-email", "PUT", { email: email.trim(), code: code.trim() }); setMsg("邮箱已绑定"); setEmail(""); setCode(""); setSent(false); onBound(); }
-    catch (cause) { setMsg((cause as Error).message); } finally { setBusy(false); }
-  }
-  return (
-    <Card>
-      <CardHeader><CardTitle>邮箱</CardTitle></CardHeader>
-      <CardContent>
-        <p style={{ margin: "0 0 8px", fontSize: 13 }}>当前：{current || "未绑定"}。绑定后可用邮箱找回密码。</p>
-        <Field label={current ? "更换邮箱" : "邮箱地址"}>
-          <div style={{ display: "flex", gap: 8 }}>
-            <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
-            <Button variant="secondary" onClick={() => void send()} disabled={busy || !email.includes("@")}>{sent ? "重新发送" : "发送验证码"}</Button>
-          </div>
-        </Field>
-        {sent ? (
-          <Field label="验证码"><div style={{ display: "flex", gap: 8 }}>
-            <Input value={code} onChange={(e) => setCode(e.target.value)} placeholder="6 位数字" inputMode="numeric" />
-            <Button onClick={() => void bind()} disabled={busy || code.trim().length < 4}>绑定</Button>
-          </div></Field>
-        ) : null}
-        {msg ? <p style={{ fontSize: 13, margin: "6px 0 0" }}>{msg}</p> : null}
-      </CardContent>
-    </Card>
-  );
+  mobile?: string | null; email?: string | null; hasPassword?: boolean;
 }
 interface MyInviteCode { code: string; usedCount: number }
 
-/** 个人资料、绑定邮箱、邀请。改密码是独立页面（password.tsx）。通用模块：只依赖 member 的 app 接口，不含任何产品特有字段。 */
+/** +8613812345678 → +86 138****5678；不是 E.164 的原样打码中间段。 */
+function maskMobile(m: string): string {
+  const digits = m.replace(/^\+\d{1,3}/, "");
+  const cc = m.slice(0, m.length - digits.length);
+  if (digits.length < 7) return m;
+  return `${cc ? `${cc} ` : ""}${digits.slice(0, 3)}****${digits.slice(-4)}`;
+}
+
+/** alice@example.com → al***@example.com */
+function maskEmail(e: string): string {
+  const [name, domain] = e.split("@");
+  if (!domain) return e;
+  return `${name.slice(0, Math.min(2, name.length))}***@${domain}`;
+}
+
+const actionClass =
+  "inline-flex h-8 items-center rounded-md border border-[var(--border)] px-3 text-xs font-medium text-[var(--foreground)] transition hover:bg-[var(--muted)]";
+
+function Row({ label, value, hint, action }: { label: string; value: React.ReactNode; hint?: string; action?: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-4 border-b border-[var(--border)] py-3.5 last:border-b-0">
+      <div className="w-24 shrink-0 text-sm text-[var(--muted-foreground)]">{label}</div>
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-sm text-[var(--foreground)]">{value}</div>
+        {hint ? <div className="mt-0.5 text-xs text-[var(--muted-foreground)]">{hint}</div> : null}
+      </div>
+      {action ? <div className="shrink-0">{action}</div> : null}
+    </div>
+  );
+}
+
+/**
+ * 个人资料：只读展示 + 各项单独的修改入口。
+ *
+ * 用户名不可改；手机、邮箱要走验证码，所以各自是独立页面（mobile.tsx / email.tsx），
+ * 密码在 password.tsx。这里唯一能就地改的是昵称，也是在抽屉里改、不直接暴露输入框。
+ */
 export default function Page() {
   const [profile, setProfile] = React.useState<MemberProfile | null>(null);
-  const [nickname, setNickname] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
-  const [saved, setSaved] = React.useState(false);
+  const [notice, setNotice] = React.useState<string | null>(null);
+  const [editingNickname, setEditingNickname] = React.useState(false);
+  const [nickname, setNickname] = React.useState("");
+  const [saving, setSaving] = React.useState(false);
   const [invite, setInvite] = React.useState<MyInviteCode | null>(null);
   const [copied, setCopied] = React.useState(false);
 
   const load = React.useCallback(async () => {
-    setError(null);
     try {
-      const p = await apiFetch<MemberProfile>("/app/member/user/get");
-      setProfile(p); setNickname(p.nickname ?? "");
+      setProfile(await apiFetch<MemberProfile>("/app/member/user/get"));
+      setError(null);
     } catch (cause) { setError((cause as Error).message); }
   }, []);
 
@@ -74,47 +71,98 @@ export default function Page() {
     return () => { alive = false; };
   }, []);
 
-  async function save() {
-    setError(null); setSaved(false);
+  async function saveNickname() {
+    setSaving(true); setError(null); setNotice(null);
     try {
-      await apiWrite("/app/member/user/update", "PUT", { nickname });
-      setSaved(true); void load();
-    } catch (cause) { setError((cause as Error).message); }
+      await apiWrite("/app/member/user/update-nickname", "PUT", { nickname: nickname.trim() });
+      setEditingNickname(false); setNotice("昵称已更新"); void load();
+    } catch (cause) { setError((cause as Error).message); } finally { setSaving(false); }
   }
 
+  const display = profile?.nickname || profile?.username || "";
   const inviteLink = invite && typeof window !== "undefined" ? `${window.location.origin}/register?invite=${encodeURIComponent(invite.code)}` : "";
 
   return (
-    <div>
-      <PageHeader eyebrow="ACCOUNT" title="个人资料" description="账号信息、邮箱与邀请；修改密码在右上角个人菜单里。" />
-      {error ? <p role="alert">{error}</p> : null}
-      {saved ? <p>已保存</p> : null}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0,1fr))", gap: 12 }}>
-        <Card>
-          <CardHeader><CardTitle>基本信息</CardTitle></CardHeader>
-          <CardContent>
-            <Field label="用户名"><Input value={profile?.username ?? ""} readOnly /></Field>
-            <Field label="昵称"><Input value={nickname} onChange={(e) => setNickname(e.target.value)} /></Field>
-            <Field label="手机"><Input value={profile?.mobile ?? ""} readOnly /></Field>
-            <Field label="邮箱"><Input value={profile?.email ?? ""} readOnly placeholder="未绑定" /></Field>
-            <div style={{ marginTop: 12 }}><Button onClick={() => void save()}>保存</Button></div>
-          </CardContent>
-        </Card>
-        <BindEmailCard current={profile?.email} onBound={() => void load()} />
-      </div>
+    <div className="flex flex-col gap-4">
+      <PageHeader eyebrow="ACCOUNT" title="个人资料" description="账号信息与安全设置" />
+      {error ? <Alert tone="error">{error}</Alert> : null}
+      {notice ? <Alert tone="info">{notice}</Alert> : null}
+
+      <Card>
+        <CardContent className="flex items-center gap-4 py-5">
+          <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-[var(--foreground)] text-xl font-semibold text-[var(--background)]">
+            {display.slice(0, 1).toUpperCase() || "·"}
+          </span>
+          <div className="min-w-0">
+            <div className="truncate text-base font-semibold text-[var(--foreground)]">{display || "—"}</div>
+            <div className="mt-0.5 truncate text-sm text-[var(--muted-foreground)]">{profile?.username ? `@${profile.username}` : ""}</div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle>账号信息</CardTitle></CardHeader>
+        <CardContent>
+          <Row label="用户名" value={profile?.username ?? "—"} hint="用户名注册后不可修改" />
+          <Row
+            label="昵称"
+            value={profile?.nickname || "未设置"}
+            action={<button type="button" className={actionClass} onClick={() => { setNickname(profile?.nickname ?? ""); setEditingNickname(true); }}>修改</button>}
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle>安全设置</CardTitle></CardHeader>
+        <CardContent>
+          <Row
+            label="手机号"
+            value={profile?.mobile ? maskMobile(profile.mobile) : "未绑定"}
+            hint="用于短信登录与找回密码"
+            action={<KitLink href="/member/mobile" className={actionClass}>{profile?.mobile ? "修改" : "绑定"}</KitLink>}
+          />
+          <Row
+            label="邮箱"
+            value={profile?.email ? maskEmail(profile.email) : "未绑定"}
+            hint="用于接收通知与找回密码"
+            action={<KitLink href="/member/email" className={actionClass}>{profile?.email ? "修改" : "绑定"}</KitLink>}
+          />
+          <Row
+            label="登录密码"
+            value={profile?.hasPassword === false ? "未设置" : "已设置"}
+            hint={profile?.hasPassword === false ? "设置后可用用户名 + 密码登录" : "建议定期更换，不要与其他网站使用同一密码"}
+            action={<KitLink href="/member/password" className={actionClass}>{profile?.hasPassword === false ? "设置" : "修改"}</KitLink>}
+          />
+        </CardContent>
+      </Card>
+
       {invite ? (
-        <Card style={{ marginTop: 12 }}>
+        <Card>
           <CardHeader><CardTitle>邀请好友</CardTitle></CardHeader>
           <CardContent>
-            <p style={{ margin: "0 0 6px", fontSize: 13 }}>我的邀请码：<code>{invite.code}</code>，已邀请 {invite.usedCount} 人。好友注册时填写邀请码，或直接用下面的链接注册。</p>
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <p className="mb-2 text-sm">我的邀请码：<code>{invite.code}</code>，已邀请 {invite.usedCount} 人。好友注册时填写邀请码，或直接用下面的链接注册。</p>
+            <div className="flex items-center gap-2">
               <Input value={inviteLink} readOnly />
               <Button variant="secondary" onClick={() => { void navigator.clipboard?.writeText(inviteLink); setCopied(true); }}>{copied ? "已复制" : "复制链接"}</Button>
             </div>
-            <p style={{ margin: "6px 0 0", fontSize: 12, color: "var(--muted-foreground)" }}>是否有邀请奖励、奖励多少由平台设定，以实际到账为准。</p>
+            <p className="mt-2 text-xs text-[var(--muted-foreground)]">是否有邀请奖励、奖励多少由平台设定，以实际到账为准。</p>
           </CardContent>
         </Card>
       ) : null}
+
+      <Drawer
+        open={editingNickname}
+        onClose={() => setEditingNickname(false)}
+        title="修改昵称"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setEditingNickname(false)}>取消</Button>
+            <Button onClick={() => void saveNickname()} disabled={saving || !nickname.trim()}>{saving ? "保存中…" : "保存"}</Button>
+          </>
+        }
+      >
+        <Field label="昵称"><Input value={nickname} onChange={(e) => setNickname(e.target.value)} maxLength={32} autoFocus /></Field>
+      </Drawer>
     </div>
   );
 }
