@@ -16,7 +16,7 @@ export default function Page() {
   const [busy, setBusy] = React.useState(false);
 
   const client = useQueryClient();
-  const profileQ = useQuery({ queryKey: ["member-self"], queryFn: () => apiFetch<{ hasPassword?: boolean }>("/app/member/user/get") });
+  const profileQ = useQuery({ queryKey: ["account-self"], queryFn: () => apiFetch<{ hasPassword?: boolean }>("/app/member/user/get") });
   // 读不到资料时按「已有密码」处理：多要一个当前密码，比把没密码的人卡住更安全
   const hasPassword: boolean | null = profileQ.data ? profileQ.data.hasPassword !== false : profileQ.isError ? true : null;
 
@@ -29,7 +29,7 @@ export default function Page() {
     try {
       await apiWrite("/app/member/user/update-password", "PUT", { oldPassword: pw.old, newPassword: pw.next });
       setPw({ old: "", next: "", confirm: "" }); setDone(true);
-      void client.invalidateQueries({ queryKey: ["member-self"] });
+      void client.invalidateQueries({ queryKey: ["account-self"] });
     } catch (cause) { setError((cause as Error).message); } finally { setBusy(false); }
   }
 
@@ -49,7 +49,7 @@ export default function Page() {
             <Field label="确认新密码"><Input type="password" value={pw.confirm} onChange={(e) => setPw({ ...pw, confirm: e.target.value })} autoComplete="new-password" /></Field>
             <div className="mt-1 flex items-center gap-2">
               <Button type="submit" disabled={busy || hasPassword === null || (hasPassword && !pw.old) || !pw.next || !pw.confirm}>{busy ? "提交中…" : "保存"}</Button>
-              <KitLink href="/member/profile" className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)]">返回个人资料</KitLink>
+              <KitLink href="/account/profile" className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)]">返回个人资料</KitLink>
             </div>
           </form>
         </CardContent>

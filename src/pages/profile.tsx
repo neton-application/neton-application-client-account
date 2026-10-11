@@ -10,7 +10,6 @@ interface MemberProfile {
   id: number; username?: string | null; nickname?: string | null; avatar?: string | null;
   mobile?: string | null; email?: string | null; hasPassword?: boolean;
 }
-interface MyInviteCode { code: string; usedCount: number }
 
 const actionClass =
   "inline-flex h-8 items-center rounded-md border border-[var(--border)] px-3 text-xs font-medium text-[var(--foreground)] transition hover:bg-[var(--muted)]";
@@ -40,17 +39,13 @@ export default function Page() {
   const [editingNickname, setEditingNickname] = React.useState(false);
   const [nickname, setNickname] = React.useState("");
   const [saving, setSaving] = React.useState(false);
-  const [copied, setCopied] = React.useState(false);
 
   // useQuery 而不是 effect 里取数：工作区切回页签会重挂 effect，那样每次切换都整页重拉。
-  // 「member-self」与邮箱 / 手机 / 密码页共用，那几页改完失效它，回到这里就是新值。
+  // 「account-self」与邮箱 / 手机 / 密码页共用，那几页改完失效它，回到这里就是新值。
   const client = useQueryClient();
-  const profileQ = useQuery({ queryKey: ["member-self"], queryFn: () => apiFetch<MemberProfile>("/app/member/user/get") });
-  // 未启用邀请功能时接口会失败，当作没有邀请码，不报错
-  const inviteQ = useQuery({ queryKey: ["member-invite-code"], queryFn: () => apiFetch<MyInviteCode>("/app/member/invite-code/mine").catch(() => null) });
+  const profileQ = useQuery({ queryKey: ["account-self"], queryFn: () => apiFetch<MemberProfile>("/app/member/user/get") });
   const profile = profileQ.data ?? null;
-  const invite = inviteQ.data ?? null;
-  const load = () => client.invalidateQueries({ queryKey: ["member-self"] });
+  const load = () => client.invalidateQueries({ queryKey: ["account-self"] });
 
   async function saveNickname() {
     setSaving(true); setError(null); setNotice(null);
@@ -61,7 +56,6 @@ export default function Page() {
   }
 
   const display = profile ? memberDisplayName(profile) : "";
-  const inviteLink = invite && typeof window !== "undefined" ? `${window.location.origin}/register?invite=${encodeURIComponent(invite.code)}` : "";
 
   return (
     <div className="flex flex-col gap-4">
@@ -104,36 +98,22 @@ export default function Page() {
             label="手机号"
             value={profile?.mobile ? maskMobile(profile.mobile) : "未绑定"}
             hint="用于短信登录与找回密码"
-            action={<KitLink href="/member/mobile" className={actionClass}>{profile?.mobile ? "修改" : "绑定"}</KitLink>}
+            action={<KitLink href="/account/mobile" className={actionClass}>{profile?.mobile ? "修改" : "绑定"}</KitLink>}
           />
           <Row
             label="邮箱"
             value={profile?.email ? maskEmail(profile.email) : "未绑定"}
             hint="用于接收通知与找回密码"
-            action={<KitLink href="/member/email" className={actionClass}>{profile?.email ? "修改" : "绑定"}</KitLink>}
+            action={<KitLink href="/account/email" className={actionClass}>{profile?.email ? "修改" : "绑定"}</KitLink>}
           />
           <Row
             label="登录密码"
             value={profile?.hasPassword === false ? "未设置" : "已设置"}
             hint={profile?.hasPassword === false ? "设置后可用用户名 + 密码登录" : "建议定期更换，不要与其他网站使用同一密码"}
-            action={<KitLink href="/member/password" className={actionClass}>{profile?.hasPassword === false ? "设置" : "修改"}</KitLink>}
+            action={<KitLink href="/account/password" className={actionClass}>{profile?.hasPassword === false ? "设置" : "修改"}</KitLink>}
           />
         </CardContent>
       </Card>
-
-      {invite ? (
-        <Card>
-          <CardHeader><CardTitle>邀请好友</CardTitle></CardHeader>
-          <CardContent>
-            <p className="mb-2 text-sm">我的邀请码：<code>{invite.code}</code>，已邀请 {invite.usedCount} 人。好友注册时填写邀请码，或直接用下面的链接注册。</p>
-            <div className="flex items-center gap-2">
-              <Input value={inviteLink} readOnly />
-              <Button variant="secondary" onClick={() => { void navigator.clipboard?.writeText(inviteLink); setCopied(true); }}>{copied ? "已复制" : "复制链接"}</Button>
-            </div>
-            <p className="mt-2 text-xs text-[var(--muted-foreground)]">是否有邀请奖励、奖励多少由平台设定，以实际到账为准。</p>
-          </CardContent>
-        </Card>
-      ) : null}
 
       <Drawer
         open={editingNickname}

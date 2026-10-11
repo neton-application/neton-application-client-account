@@ -19,9 +19,9 @@ export default function Page() {
   const [notice, setNotice] = React.useState<string | null>(null);
 
   const client = useQueryClient();
-  const profileQ = useQuery({ queryKey: ["member-self"], queryFn: () => apiFetch<{ email?: string | null }>("/app/member/user/get") });
+  const profileQ = useQuery({ queryKey: ["account-self"], queryFn: () => apiFetch<{ email?: string | null }>("/app/member/user/get") });
   const current: string | null | undefined = profileQ.data ? profileQ.data.email ?? null : undefined;
-  const load = () => client.invalidateQueries({ queryKey: ["member-self"] });
+  const load = () => client.invalidateQueries({ queryKey: ["account-self"] });
   React.useEffect(() => {
     if (cooldown <= 0) return;
     const t = setTimeout(() => setCooldown((c) => c - 1), 1000);
@@ -66,7 +66,7 @@ export default function Page() {
             <Field label="验证码"><Input value={code} onChange={(e) => setCode(e.target.value)} placeholder="6 位数字" inputMode="numeric" autoComplete="one-time-code" disabled={!sent} /></Field>
             <div className="mt-1 flex items-center gap-2">
               <Button type="submit" disabled={busy || !sent || code.trim().length < 4}>确认绑定</Button>
-              <KitLink href="/member/profile" className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)]">返回个人资料</KitLink>
+              <KitLink href="/account/profile" className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)]">返回个人资料</KitLink>
             </div>
           </form>
         </CardContent>
