@@ -3,6 +3,8 @@
 import * as React from "react";
 import { apiFetch, apiWrite } from "@neton/application-client-runtime/client";
 import { useQuery, useQueryClient } from "@neton/application-client-runtime/client-context";
+import { useT } from "@neton/application-client-runtime/i18n";
+import { useTabTitle } from "@neton/application-client-runtime/workspace";
 import { maskEmail, maskMobile, memberDisplayName, memberInitial } from "@neton/application-client-runtime/types";
 import { Alert, Button, Card, CardContent, CardHeader, CardTitle, Drawer, Field, Input, KitLink, PageHeader, UserIcon } from "@neton/application-client-kit";
 
@@ -34,6 +36,8 @@ function Row({ label, value, hint, action }: { label: string; value: React.React
  * 密码在 password.tsx。这里唯一能就地改的是昵称，也是在抽屉里改、不直接暴露输入框。
  */
 export default function Page() {
+  const t = useT("account");
+  useTabTitle(t("profile.title"));
   const [error, setError] = React.useState<string | null>(null);
   const [notice, setNotice] = React.useState<string | null>(null);
   const [editingNickname, setEditingNickname] = React.useState(false);
@@ -51,7 +55,7 @@ export default function Page() {
     setSaving(true); setError(null); setNotice(null);
     try {
       await apiWrite("/app/member/user/update-nickname", "PUT", { nickname: nickname.trim() });
-      setEditingNickname(false); setNotice("昵称已更新"); void load();
+      setEditingNickname(false); setNotice(t("profile.nicknameUpdated")); void load();
     } catch (cause) { setError((cause as Error).message); } finally { setSaving(false); }
   }
 
@@ -59,7 +63,7 @@ export default function Page() {
 
   return (
     <div className="flex flex-col gap-4">
-      <PageHeader eyebrow="ACCOUNT" title="个人资料" description="账号信息与安全设置" />
+      <PageHeader eyebrow="ACCOUNT" title={t("profile.title")} description={t("profile.description")} />
       {error ?? profileQ.error ? <Alert tone="error">{error ?? (profileQ.error as Error).message}</Alert> : null}
       {notice ? <Alert tone="info">{notice}</Alert> : null}
 
@@ -76,41 +80,41 @@ export default function Page() {
       </Card>
 
       <Card>
-        <CardHeader><CardTitle>账号信息</CardTitle></CardHeader>
+        <CardHeader><CardTitle>{t("profile.accountInfo")}</CardTitle></CardHeader>
         <CardContent>
           <Row
-            label="用户名"
-            value={profile?.username || "未设置"}
-            hint={profile?.username ? "用户名注册后不可修改" : "短信注册的账号没有用户名，可用手机号登录"}
+            label={t("profile.username")}
+            value={profile?.username || t("value.notSet")}
+            hint={profile?.username ? t("profile.usernameHintLocked") : t("profile.usernameHintNone")}
           />
           <Row
-            label="昵称"
-            value={profile?.nickname || "未设置"}
-            action={<button type="button" className={actionClass} onClick={() => { setNickname(profile?.nickname ?? ""); setEditingNickname(true); }}>修改</button>}
+            label={t("profile.nickname")}
+            value={profile?.nickname || t("value.notSet")}
+            action={<button type="button" className={actionClass} onClick={() => { setNickname(profile?.nickname ?? ""); setEditingNickname(true); }}>{t("action.edit")}</button>}
           />
         </CardContent>
       </Card>
 
       <Card>
-        <CardHeader><CardTitle>安全设置</CardTitle></CardHeader>
+        <CardHeader><CardTitle>{t("profile.security")}</CardTitle></CardHeader>
         <CardContent>
           <Row
-            label="手机号"
-            value={profile?.mobile ? maskMobile(profile.mobile) : "未绑定"}
-            hint="用于短信登录与找回密码"
-            action={<KitLink href="/account/mobile" className={actionClass}>{profile?.mobile ? "修改" : "绑定"}</KitLink>}
+            label={t("profile.mobile")}
+            value={profile?.mobile ? maskMobile(profile.mobile) : t("value.notBound")}
+            hint={t("profile.mobileHint")}
+            action={<KitLink href="/account/mobile" className={actionClass}>{profile?.mobile ? t("action.edit") : t("action.bind")}</KitLink>}
           />
           <Row
-            label="邮箱"
-            value={profile?.email ? maskEmail(profile.email) : "未绑定"}
-            hint="用于接收通知与找回密码"
-            action={<KitLink href="/account/email" className={actionClass}>{profile?.email ? "修改" : "绑定"}</KitLink>}
+            label={t("profile.email")}
+            value={profile?.email ? maskEmail(profile.email) : t("value.notBound")}
+            hint={t("profile.emailHint")}
+            action={<KitLink href="/account/email" className={actionClass}>{profile?.email ? t("action.edit") : t("action.bind")}</KitLink>}
           />
           <Row
-            label="登录密码"
-            value={profile?.hasPassword === false ? "未设置" : "已设置"}
-            hint={profile?.hasPassword === false ? "设置后可用用户名 + 密码登录" : "建议定期更换，不要与其他网站使用同一密码"}
-            action={<KitLink href="/account/password" className={actionClass}>{profile?.hasPassword === false ? "设置" : "修改"}</KitLink>}
+            label={t("profile.password")}
+            value={profile?.hasPassword === false ? t("value.notSet") : t("value.passwordSet")}
+            hint={profile?.hasPassword === false ? t("profile.passwordHintSet") : t("profile.passwordHintHas")}
+            action={<KitLink href="/account/password" className={actionClass}>{profile?.hasPassword === false ? t("action.set") : t("action.edit")}</KitLink>}
           />
         </CardContent>
       </Card>
@@ -118,15 +122,15 @@ export default function Page() {
       <Drawer
         open={editingNickname}
         onClose={() => setEditingNickname(false)}
-        title="修改昵称"
+        title={t("profile.editNicknameTitle")}
         footer={
           <>
-            <Button variant="outline" onClick={() => setEditingNickname(false)}>取消</Button>
-            <Button onClick={() => void saveNickname()} disabled={saving || !nickname.trim()}>{saving ? "保存中…" : "保存"}</Button>
+            <Button variant="outline" onClick={() => setEditingNickname(false)}>{t("action.cancel")}</Button>
+            <Button onClick={() => void saveNickname()} disabled={saving || !nickname.trim()}>{saving ? t("action.saving") : t("action.save")}</Button>
           </>
         }
       >
-        <Field label="昵称"><Input value={nickname} onChange={(e) => setNickname(e.target.value)} maxLength={32} autoFocus /></Field>
+        <Field label={t("profile.nickname")}><Input value={nickname} onChange={(e) => setNickname(e.target.value)} maxLength={32} autoFocus /></Field>
       </Drawer>
     </div>
   );

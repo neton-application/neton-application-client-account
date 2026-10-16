@@ -4,6 +4,10 @@ import { defineFrontModule } from "@neton/application-client-contract";
 export default defineFrontModule({
   id: "account",
   contractVersion: "1.0.0",
+  locales: [
+    { lang: "zh-CN", entry: "zh-CN" },
+    { lang: "en-US", entry: "en-US" },
+  ],
   pages: [
     { key: "account/profile/index", path: "/account/profile", entry: "profile", rendering: "client", title: "个人资料" },
     { key: "account/password/index", path: "/account/password", entry: "password", rendering: "client", title: "修改密码" },
