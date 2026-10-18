@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { apiFetch, apiWrite } from "@neton/application-client-runtime/client";
+import { useDescribeError } from "@neton/application-client-runtime/errors";
 import { useQuery, useQueryClient } from "@neton/application-client-runtime/client-context";
 import { useT } from "@neton/application-client-runtime/i18n";
 import { useTabTitle } from "@neton/application-client-runtime/workspace";
@@ -17,6 +18,7 @@ const COUNTRY_CODES = ["+86", "+852", "+853", "+886", "+1", "+44", "+81", "+82",
  * 这里拆成区号 + 号码两栏，免得用户自己拼。
  */
 export default function Page() {
+  const describeError = useDescribeError("account");
   const t = useT("account");
   const [cc, setCc] = React.useState("+86");
   const [number, setNumber] = React.useState("");
@@ -47,7 +49,7 @@ export default function Page() {
     try {
       await apiWrite("/app/member/user/send-sms-code", "POST", { mobile: e164, scene: SCENE_UPDATE_MOBILE });
       setSent(true); setCooldown(60); setNotice(t("mobile.sent", { number: `${cc} ${digits}` }));
-    } catch (cause) { setError((cause as Error).message); } finally { setBusy(false); }
+    } catch (cause) { setError(describeError(cause)); } finally { setBusy(false); }
   }
 
   async function bind(event: React.FormEvent) {
@@ -56,7 +58,7 @@ export default function Page() {
     try {
       await apiWrite("/app/member/user/update-mobile", "PUT", { mobile: e164, smsCode: code.trim() });
       setNotice(t("mobile.bound")); setNumber(""); setCode(""); setSent(false); load();
-    } catch (cause) { setError((cause as Error).message); } finally { setBusy(false); }
+    } catch (cause) { setError(describeError(cause)); } finally { setBusy(false); }
   }
 
   return (

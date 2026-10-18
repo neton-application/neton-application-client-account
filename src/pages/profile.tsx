@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { apiFetch, apiWrite } from "@neton/application-client-runtime/client";
+import { useDescribeError } from "@neton/application-client-runtime/errors";
 import { useQuery, useQueryClient } from "@neton/application-client-runtime/client-context";
 import { useT } from "@neton/application-client-runtime/i18n";
 import { useTabTitle } from "@neton/application-client-runtime/workspace";
@@ -36,6 +37,7 @@ function Row({ label, value, hint, action }: { label: string; value: React.React
  * 密码在 password.tsx。这里唯一能就地改的是昵称，也是在抽屉里改、不直接暴露输入框。
  */
 export default function Page() {
+  const describeError = useDescribeError("account");
   const t = useT("account");
   useTabTitle(t("profile.title"));
   const [error, setError] = React.useState<string | null>(null);
@@ -56,7 +58,7 @@ export default function Page() {
     try {
       await apiWrite("/app/member/user/update-nickname", "PUT", { nickname: nickname.trim() });
       setEditingNickname(false); setNotice(t("profile.nicknameUpdated")); void load();
-    } catch (cause) { setError((cause as Error).message); } finally { setSaving(false); }
+    } catch (cause) { setError(describeError(cause)); } finally { setSaving(false); }
   }
 
   const display = profile ? memberDisplayName(profile) : "";
@@ -64,7 +66,7 @@ export default function Page() {
   return (
     <div className="flex flex-col gap-4">
       <PageHeader eyebrow="ACCOUNT" title={t("profile.title")} description={t("profile.description")} />
-      {error ?? profileQ.error ? <Alert tone="error">{error ?? (profileQ.error as Error).message}</Alert> : null}
+      {error ?? profileQ.error ? <Alert tone="error">{error ?? describeError(profileQ.error)}</Alert> : null}
       {notice ? <Alert tone="info">{notice}</Alert> : null}
 
       <Card>

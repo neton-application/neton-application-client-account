@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { apiFetch, apiWrite } from "@neton/application-client-runtime/client";
+import { useDescribeError } from "@neton/application-client-runtime/errors";
 import { useQuery, useQueryClient } from "@neton/application-client-runtime/client-context";
 import { useT } from "@neton/application-client-runtime/i18n";
 import { useTabTitle } from "@neton/application-client-runtime/workspace";
@@ -12,6 +13,7 @@ import { Alert, Button, Card, CardContent, Field, Input, KitLink, PageHeader } f
  * 免得有人把别人的邮箱挂到自己账号上，或者手滑填错后再也收不到找回密码的邮件。
  */
 export default function Page() {
+  const describeError = useDescribeError("account");
   const t = useT("account");
   const [email, setEmail] = React.useState("");
   const [code, setCode] = React.useState("");
@@ -37,7 +39,7 @@ export default function Page() {
     try {
       await apiWrite("/app/member/user/send-email-code", "POST", { email: email.trim(), scene: "bind_email" });
       setSent(true); setCooldown(60); setNotice(t("email.sent", { email: email.trim() }));
-    } catch (cause) { setError((cause as Error).message); } finally { setBusy(false); }
+    } catch (cause) { setError(describeError(cause)); } finally { setBusy(false); }
   }
 
   async function bind(event: React.FormEvent) {
@@ -46,7 +48,7 @@ export default function Page() {
     try {
       await apiWrite("/app/member/user/bind-email", "PUT", { email: email.trim(), code: code.trim() });
       setNotice(t("email.bound")); setEmail(""); setCode(""); setSent(false); load();
-    } catch (cause) { setError((cause as Error).message); } finally { setBusy(false); }
+    } catch (cause) { setError(describeError(cause)); } finally { setBusy(false); }
   }
 
   const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());

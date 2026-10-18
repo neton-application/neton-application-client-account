@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { apiFetch, apiWrite } from "@neton/application-client-runtime/client";
+import { useDescribeError } from "@neton/application-client-runtime/errors";
 import { useQuery, useQueryClient } from "@neton/application-client-runtime/client-context";
 import { useT } from "@neton/application-client-runtime/i18n";
 import { useTabTitle } from "@neton/application-client-runtime/workspace";
@@ -12,6 +13,7 @@ import { Alert, Button, Card, CardContent, Field, Input, KitLink, PageHeader } f
  * 短信或社交登录注册、从没设过密码的账号直接设置。忘记当前密码请走登录页的「找回密码」。
  */
 export default function Page() {
+  const describeError = useDescribeError("account");
   const t = useT("account");
   const [pw, setPw] = React.useState({ old: "", next: "", confirm: "" });
   const [error, setError] = React.useState<string | null>(null);
@@ -35,7 +37,7 @@ export default function Page() {
       await apiWrite("/app/member/user/update-password", "PUT", { oldPassword: pw.old, newPassword: pw.next });
       setPw({ old: "", next: "", confirm: "" }); setDone(true);
       void client.invalidateQueries({ queryKey: ["account-self"] });
-    } catch (cause) { setError((cause as Error).message); } finally { setBusy(false); }
+    } catch (cause) { setError(describeError(cause)); } finally { setBusy(false); }
   }
 
   const title = hasPassword === false ? t("pw.setTitle") : t("pw.title");
